@@ -190,14 +190,14 @@ h2 .sub.mob{display:none}
   </div>
 
   <div class="tabs" id="tabs">
-    <button data-t="about" class="on">About</button>
-    <button data-t="trends">Trends</button>
+    <button data-t="about">About</button>
+    <button data-t="trends" class="on">Trends</button>
     <button data-t="tt">Themes, topics &amp; Pages</button>
     <button data-t="examples">Example ads</button>
     <button data-t="method">Methods</button>
   </div>
 
-  <div class="tabpanel" id="t-about">
+  <div class="tabpanel" id="t-about" hidden>
     <h3>The project</h3>
     <p>This page summarizes every ad classified as political by Meta that delivered impressions in Mexico City between January 2023 and December 2025, collected from the public <a href="https://www.facebook.com/ads/library/">Meta Ad Library</a>. The full pull covers 877,194 ads from 31,773 advertiser pages nationwide; the analysis here restricts to ads that actually reached CDMX audiences and carry analyzable text — 385,176 ads from 11,343 pages.</p>
     <h3>Ads mapping into topics and themes</h3>
@@ -244,7 +244,7 @@ h2 .sub.mob{display:none}
     <div id="ex-cards" style="max-width:86ch"></div>
   </div>
 
-  <div class="tabpanel wide" id="t-trends" hidden>
+  <div class="tabpanel wide" id="t-trends">
     <p style="max-width:76ch">Monthly ads run (or MXN spent) by theme and topic. The <b>lighter band</b> runs from the constitutional start of each electoral process to the start of campaigns; the <b>gold band</b> covers campaigns through election day.</p>
     <p class="trnote">One of my first objectives on themes and topics is to identify those that are quite sensitive to the electoral calendar and those that do not show said strong seasonal patterns (later formalized with TS analysis or anomaly detection). See for instance the series shown by default for each category. </p>
     <h3>By theme</h3>
