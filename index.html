@@ -1,3 +1,6 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CDMX Political Ads</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;800;900&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -118,6 +121,39 @@ td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 .schip{font-family:"Libre Franklin",sans-serif;font-size:12px;font-weight:600;border:1px solid var(--line);background:#fcfaf4;padding:2px 9px 2px 6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink2)}
 footer{border-top:1px solid var(--line);margin-top:50px;padding:18px 28px;
   font-size:13px;color:var(--muted);text-align:center;font-style:italic}
+/* ---- map controls + touch ---- */
+#map{touch-action:pan-y}
+#mapctl{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;
+  gap:6px;z-index:2}
+#mapctl button{all:unset;cursor:pointer;width:32px;height:32px;text-align:center;
+  background:#fcfaf4;border:1px solid var(--line);color:var(--ink);
+  font:600 17px/32px "Libre Franklin",sans-serif}
+h2 .sub.mob{display:none}
+/* ---- mobile-tuned composition ---- */
+@media (max-width:700px){
+  #banner{height:190px}
+  .masthead{margin-top:-72px}
+  .standfirst{display:none}
+  .wrap{padding:16px 14px 40px}
+  .grid{display:flex;flex-direction:column;gap:24px;margin-top:14px}
+  .grid>div:nth-child(2){order:-1}
+  #map{height:380px}
+  h2 .sub.desk{display:none}
+  h2 .sub.mob{display:inline}
+  .legend{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;
+    -webkit-overflow-scrolling:touch}
+  .legend .lhint{display:none}
+  .lchip{flex:0 0 auto}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    margin-top:30px}
+  .tabs button{white-space:nowrap;padding:10px 14px}
+  .subtabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .subtabs button{white-space:nowrap;flex:0 0 auto}
+  .ttsec{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #topicstbl,#clusterstbl,#pagestbl{min-width:620px}
+  .barrow{grid-template-columns:112px 1fr 62px}
+  .trnote,.method-note{text-align:left}
+}
 </style>
 
 <div id="banner" role="img" aria-label="Alameda Central seen across Avenida Juárez, Mexico City"></div>
@@ -145,8 +181,10 @@ footer{border-top:1px solid var(--line);margin-top:50px;padding:18px 28px;
       </div>
     </div>
     <div>
-      <h2>Map of topics and themes <span class="sub">Hover to see topics and scroll to zoom.</span></h2>
-      <div id="mapbox"><canvas id="map"></canvas><div id="maptip"></div></div>
+      <h2>Map of topics and themes <span class="sub desk">Hover to see topics and scroll to zoom.</span><span class="sub mob">Tap a point to see its topic; pinch to zoom.</span></h2>
+      <div id="mapbox"><canvas id="map"></canvas><div id="maptip"></div>
+        <div id="mapctl"><button data-z="in" aria-label="Zoom in">+</button><button data-z="out" aria-label="Zoom out">−</button><button data-z="fit" aria-label="Reset view">⌂</button></div>
+      </div>
       <div class="legend" id="legend"><span class="lhint">Click a theme to highlight it — click again to show all:</span></div>
     </div>
   </div>
@@ -270,7 +308,9 @@ function sizeMap(){
   cv.width = W*dpr; cv.height = H*dpr;
   if (!T){
     const pad = 20;
-    const s = Math.min((W-2*pad)/(vx.max-vx.min), (H-2*pad)/(vy.max-vy.min));
+    // ×.75 ≈ two wheel-ticks back from the tight percentile fit
+    const s = Math.min((W-2*pad)/(vx.max-vx.min),
+                       (H-2*pad)/(vy.max-vy.min)) * .75;
     T = {s, tx:(W-s*(vx.min+vx.max))/2, ty:(H-s*(vy.min+vy.max))/2};
   }
   draw();
@@ -292,32 +332,84 @@ function draw(){
   }
   ctx.globalAlpha = 1;
 }
-let drag = null;
-cv.addEventListener('pointerdown', e => { drag = {x:e.offsetX,y:e.offsetY,tx:T.tx,ty:T.ty}; cv.setPointerCapture(e.pointerId); });
-cv.addEventListener('pointermove', e => {
-  if (drag){ T.tx = drag.tx+e.offsetX-drag.x; T.ty = drag.ty+e.offsetY-drag.y; draw(); return; }
-  let best=-1, bd=90;
+function zoomAt(cx, cy, f){
+  T.tx = cx-f*(cx-T.tx); T.ty = cy-f*(cy-T.ty); T.s *= f; draw();
+}
+function nearest(px, py, maxD){
+  let best=-1, bd=maxD;
   for (let i=0;i<N;i++){
     if (P.g[i] < 0) continue;
-    const dx=T.s*P.x[i]+T.tx-e.offsetX, dy=T.s*P.y[i]+T.ty-e.offsetY, d=dx*dx+dy*dy;
+    const dx=T.s*P.x[i]+T.tx-px, dy=T.s*P.y[i]+T.ty-py, d=dx*dx+dy*dy;
     if (d<bd){bd=d;best=i;}
   }
+  return best;
+}
+function showTip(i, px, py){
   const tip = $('#maptip');
-  if (best<0){ tip.style.display='none'; return; }
-  const g = P.g[best], c = P.c[best];
+  if (i<0){ tip.style.display='none'; return; }
+  const g = P.g[i], c = P.c[i];
   tip.innerHTML = '<b>' + esc(g>=0?GROUPS[g].label:'Unclustered') + '</b>' +
     (c>=0 ? '<br>' + esc(PD.clabels[c]||'') : '');
   tip.style.display='block';
-  tip.style.left = Math.min(e.offsetX+12, W-270)+'px';
-  tip.style.top = (e.offsetY+12)+'px';
+  tip.style.left = Math.max(4, Math.min(px+12, W-270))+'px';
+  tip.style.top = (py+12)+'px';
+}
+/* one pointer: mouse drags pan, touch taps select (vertical touch-drag
+   scrolls the page via touch-action:pan-y); two touches pinch-zoom */
+let drag = null, pinch = null;
+const ptrs = new Map();
+cv.addEventListener('pointerdown', e => {
+  ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+  if (ptrs.size === 1){
+    drag = {x:e.offsetX, y:e.offsetY, tx:T.tx, ty:T.ty, moved:false};
+    cv.setPointerCapture(e.pointerId);
+  } else if (ptrs.size === 2){
+    drag = null;
+    const [a,b] = [...ptrs.values()];
+    pinch = {d:Math.hypot(a.x-b.x,a.y-b.y), tx:T.tx, ty:T.ty, s:T.s,
+             cx:(a.x+b.x)/2, cy:(a.y+b.y)/2};
+  }
 });
-cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointermove', e => {
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+  if (pinch && ptrs.size === 2){
+    const [a,b] = [...ptrs.values()];
+    const f = Math.hypot(a.x-b.x,a.y-b.y)/pinch.d;
+    T.s = pinch.s*f;
+    T.tx = (a.x+b.x)/2 - f*(pinch.cx-pinch.tx);
+    T.ty = (a.y+b.y)/2 - f*(pinch.cy-pinch.ty);
+    draw(); return;
+  }
+  if (drag){
+    if (Math.abs(e.offsetX-drag.x)+Math.abs(e.offsetY-drag.y) > 6) drag.moved = true;
+    T.tx = drag.tx+e.offsetX-drag.x; T.ty = drag.ty+e.offsetY-drag.y;
+    if (drag.moved) draw();
+    return;
+  }
+  if (e.pointerType === 'mouse') showTip(nearest(e.offsetX, e.offsetY, 90), e.offsetX, e.offsetY);
+});
+function endPtr(e){
+  const wasDrag = drag && !drag.moved;
+  ptrs.delete(e.pointerId);
+  if (ptrs.size < 2) pinch = null;
+  if (wasDrag && e.type === 'pointerup' && e.pointerType !== 'mouse'){
+    const i = nearest(e.offsetX, e.offsetY, 700);
+    showTip(i, e.offsetX, e.offsetY);
+    hlHover = i >= 0 ? P.g[i] : null;   // tap spotlights the theme
+    draw();
+  }
+  if (ptrs.size === 0) drag = null;
+}
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', endPtr);
 cv.addEventListener('wheel', e => {
   e.preventDefault();
-  const f = Math.exp(-e.deltaY*.0015);
-  T.tx = e.offsetX-f*(e.offsetX-T.tx); T.ty = e.offsetY-f*(e.offsetY-T.ty);
-  T.s *= f; draw();
+  zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY*.0015));
 }, {passive:false});
+document.querySelectorAll('#mapctl button').forEach(b => b.onclick = () => {
+  if (b.dataset.z === 'fit'){ T = null; sizeMap(); return; }
+  zoomAt(W/2, H/2, b.dataset.z === 'in' ? 1.35 : 1/1.35);
+});
 function renderLegend(){
   $('#legend').innerHTML = '<span class="lhint">Click a theme to highlight  &#47; reset</span>' + PD.groups.map(g =>
     '<button class="lchip' + (hl===g.id?' on':'') + '" data-g="' + g.id + '">' +
