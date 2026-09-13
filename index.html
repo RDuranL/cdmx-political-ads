@@ -254,11 +254,13 @@ let hl = 0;                  // no default highlight — hover/click drives it
 let hlHover = null;          // transient highlight from bar hover
 let yearBit = 0;             // 0 = all years; 1/2/4 = 2023/2024/2025
 const YBIT = {2023: 1, 2024: 2, 2025: 4};
-let vx = {min:1e9,max:-1e9}, vy = {min:1e9,max:-1e9};
-for (let i = 0; i < N; i++){
-  if (P.x[i] < vx.min) vx.min = P.x[i]; if (P.x[i] > vx.max) vx.max = P.x[i];
-  if (P.y[i] < vy.min) vy.min = P.y[i]; if (P.y[i] > vy.max) vy.max = P.y[i];
-}
+/* initial view fits the dense core (5th–95th percentile, stride-sampled),
+   not the outlying islands — those stay reachable by pan / zoom-out */
+const sx = [], sy = [];
+for (let i = 0; i < N; i += 25){ sx.push(P.x[i]); sy.push(P.y[i]); }
+sx.sort((a,b) => a-b); sy.sort((a,b) => a-b);
+const q = (a,p) => a[Math.floor(p*(a.length-1))];
+const vx = {min:q(sx,.05), max:q(sx,.95)}, vy = {min:q(sy,.05), max:q(sy,.95)};
 const cv = $('#map'), ctx = cv.getContext('2d');
 let T = null, W = 0, H = 0, dpr = 1;
 function sizeMap(){
